@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 AgriStack Multi-State Token Manager — RENDER READY
-Auto refresh every 5 seconds, parallel login, memory cache
 """
 
 import os, sys, json, time, base64, re, uuid, logging, threading
@@ -17,11 +16,9 @@ from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.backends import default_backend
 from flask import Flask, jsonify
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s %(levelname)s %(message)s",
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("agristack")
+
 ocr = ddddocr.DdddOcr(show_ad=False)
 
 RSA_PUB_KEY = """-----BEGIN PUBLIC KEY-----
@@ -31,59 +28,31 @@ i+tISEuwIcL0f0I+PgmbIBPOhSnTVYmXFmtbZxXgSfLYyzq0WGNZDLJ0s5V1cE6e
 EFTb/F6ZCp79sd+/UQIDAQAB
 -----END PUBLIC KEY-----"""
 
-# ===========================================================================
-# SAARI STATES
-# ===========================================================================
 STATE_CONFIG = {
-    "AP": {"full": "apfr", "sub": "ap", "csc_id": "", "password": ""},
-    "AS": {"full": "asfr", "sub": "as", "csc_id": "456717720018", "password": "Mahizal@277"},
-    "BR": {"full": "bhfr", "sub": "bh", "csc_id": "431116620011", "password": "Akhta@csc@2002"},
-    "CG": {"full": "cgfr", "sub": "cg", "csc_id": "", "password": ""},
-    "GJ": {"full": "gjfr", "sub": "gj", "csc_id": "261547750010", "password": "Mahakal@8055"},
-    "HP": {"full": "hpfr", "sub": "hp", "csc_id": "", "password": ""},
-    "HR": {"full": "hrfr", "sub": "hr", "csc_id": "", "password": ""},
-    "KL": {"full": "klfr", "sub": "kl", "csc_id": "", "password": ""},
-    "MH": {"full": "mhfr", "sub": "mh", "csc_id": "663542960015", "password": "Amol@1234"},
-    "MP": {"full": "mpfr", "sub": "mp", "csc_id": "", "password": ""},
-    "OD": {"full": "odfr", "sub": "od", "csc_id": "341717210054", "password": "Barsha@1"},
-    "PB": {"full": "pbfr", "sub": "pb", "csc_id": "", "password": ""},
-    "RJ": {"full": "rjfr", "sub": "rj", "csc_id": "", "password": ""},
-    "TN": {"full": "tnfr", "sub": "tn", "csc_id": "", "password": ""},
-    "TR": {"full": "trfr", "sub": "tr", "csc_id": "", "password": ""},
-    "UK": {"full": "ukfr", "sub": "uk", "csc_id": "", "password": ""},
-    "UP": {"full": "upfr", "sub": "up", "csc_id": "", "password": ""},
-    "AN": {"full": "anfr", "sub": "an", "csc_id": "", "password": ""},
-    "AR": {"full": "arfr", "sub": "ar", "csc_id": "", "password": ""},
-    "CH": {"full": "chfr", "sub": "ch", "csc_id": "", "password": ""},
-    "DL": {"full": "dlfr", "sub": "dl", "csc_id": "", "password": ""},
-    "DN": {"full": "dnfr", "sub": "dn", "csc_id": "", "password": ""},
-    "GA": {"full": "gafr", "sub": "ga", "csc_id": "", "password": ""},
-    "JH": {"full": "jhfr", "sub": "jh", "csc_id": "", "password": ""},
-    "JK": {"full": "jkfr", "sub": "jk", "csc_id": "", "password": ""},
-    "KA": {"full": "kafr", "sub": "ka", "csc_id": "", "password": ""},
-    "LD": {"full": "ldfr", "sub": "ld", "csc_id": "", "password": ""},
-    "ML": {"full": "mlfr", "sub": "ml", "csc_id": "", "password": ""},
-    "MN": {"full": "mnfr", "sub": "mn", "csc_id": "", "password": ""},
-    "MZ": {"full": "mzfr", "sub": "mz", "csc_id": "", "password": ""},
-    "PY": {"full": "pyfr", "sub": "py", "csc_id": "", "password": ""},
-    "SK": {"full": "skfr", "sub": "sk", "csc_id": "", "password": ""},
-    "WB": {"full": "wbfr", "sub": "wb", "csc_id": "", "password": ""},
+    "AP": {"full": "apfr", "sub": "ap"},
+    "AS": {"full": "asfr", "sub": "as"},
+    "BR": {"full": "bhfr", "sub": "bh"},
+    "CG": {"full": "cgfr", "sub": "cg"},
+    "GJ": {"full": "gjfr", "sub": "gj"},
+    "HP": {"full": "hpfr", "sub": "hp"},
+    "HR": {"full": "hrfr", "sub": "hr"},
+    "KL": {"full": "klfr", "sub": "kl"},
+    "MH": {"full": "mhfr", "sub": "mh"},
+    "MP": {"full": "mpfr", "sub": "mp"},
+    "OD": {"full": "odfr", "sub": "od"},
+    "PB": {"full": "pbfr", "sub": "pb"},
+    "RJ": {"full": "rjfr", "sub": "rj"},
+    "TN": {"full": "tnfr", "sub": "tn"},
+    "TR": {"full": "trfr", "sub": "tr"},
+    "UK": {"full": "ukfr", "sub": "uk"},
+    "UP": {"full": "upfr", "sub": "up"},
 }
+
 ALL_STATES = sorted(STATE_CONFIG.keys())
-
-CSC_ENABLED_STATES = [
-    "AP", "AS", "BR", "CG", "GJ", "HP", "HR", "KL", "MH", "MP",
-    "OD", "PB", "RJ", "TN", "TR", "UK", "UP",
-]
-
-PARALLEL_STATES = ["MH", "AP", "HP", "KL"]
 PARALLEL_WORKERS = 3
 REFRESH_INTERVAL = 5
 
-# ===========================================================================
-# MEMORY CACHE (Render pe file system permanent nahi)
-# ===========================================================================
-_token_cache = {}   # {state: {user_token, auth_token, expires}}
+_token_cache = {}
 _cache_lock = threading.Lock()
 
 def cache_set(state, user_token, auth_token, expires_in):
@@ -91,7 +60,7 @@ def cache_set(state, user_token, auth_token, expires_in):
         _token_cache[state.upper()] = {
             'user_token': user_token,
             'auth_token': auth_token or '',
-            'expires': time.time() + expires_in - 60  # 60s buffer
+            'expires': time.time() + expires_in - 60
         }
 
 def cache_get(state):
@@ -101,9 +70,6 @@ def cache_get(state):
             return data
         return None
 
-# ===========================================================================
-# CSC CREDENTIALS
-# ===========================================================================
 CSC_CREDENTIALS = [
     {"id": "337327750017", "password": "Mktl@143"},
     {"id": "642453380016", "password": "Channi@111"},
@@ -145,7 +111,6 @@ CSC_CREDENTIALS = [
     {"id": "645365560019", "password": "Yachi@1991"},
     {"id": "252623160018", "password": "Deepak@123"},
     {"id": "557732550011", "password": "Upasna@1998"},
-    {"id": "321212540018", "password": "Amit#7879"},
     {"id": "573453250017", "password": "Kings@1122"},
     {"id": "271316170013", "password": "Adithya@201029"},
     {"id": "634225650019", "password": "Mahesh@1234"},
@@ -199,15 +164,12 @@ CSC_CREDENTIALS = [
     {"id": "9824223411", "password": "82286378"},
     {"id": "640762820017", "password": "@nubhav123"},
     {"id": "420167870011", "password": "123456789"},
-    {"id": "456161450013", "password": "duttasureshkumar"},
     {"id": "531616220012", "password": "&@_5p+#Eh.ez!Rk$$"},
     {"id": "192059060019", "password": "@Gourish3123"},
     {"id": "247564770012", "password": "Shad@123"},
-    {"id": "456161450013", "password": "7873063347"},
     {"id": "273421530012", "password": "Db@17@86#"},
     {"id": "223677210012", "password": "None"},
     {"id": "265524470018", "password": "1180345594185076736"},
-    {"id": "247564770012", "password": "Shad@321"},
     {"id": "221712150012", "password": "Jina#2211"},
     {"id": "323666660013", "password": "8121585961"},
     {"id": "213477230014", "password": "Madan@234"},
@@ -239,7 +201,6 @@ CSC_CREDENTIALS = [
     {"id": "267513510010", "password": "Raj@951981"},
     {"id": "122414320012", "password": "Cpvi@1946"},
     {"id": "257514530019", "password": "@DELHI123"},
-    {"id": "00000", "password": "0000"},
     {"id": "732412420013", "password": "Asdf@7788"},
     {"id": "247453650030", "password": "Zi@391104"},
     {"id": "633844510011", "password": "Ajay@0000"},
@@ -392,11 +353,10 @@ CSC_CREDENTIALS = [
     {"id": "542371130010", "password": "Gaj@1986"},
 ]
 
-# ===========================================================================
-# DPoP + Login Functions
-# ===========================================================================
+
 def generate_dpop_keypair():
     return ec.generate_private_key(ec.SECP256R1(), default_backend())
+
 
 def generate_dpop_proof(private_key, method, url):
     pub = private_key.public_key().public_numbers()
@@ -412,6 +372,7 @@ def generate_dpop_proof(private_key, method, url):
     s_b64 = base64.urlsafe_b64encode(sig).rstrip(b'=').decode()
     return f"{h_b64}.{p_b64}.{s_b64}"
 
+
 def encrypt_password(rvar, user, password):
     b64_user = base64.b64encode(user.encode()).decode()
     b64_pass = base64.b64encode(password.encode()).decode()
@@ -421,6 +382,7 @@ def encrypt_password(rvar, user, password):
     encrypted = key.encrypt(b64_combined.encode(), padding.PKCS1v15())
     return base64.b64encode(encrypted).decode()
 
+
 def solve_captcha(b64_str):
     if "base64," in b64_str:
         b64_str = b64_str.split("base64,")[1]
@@ -428,8 +390,8 @@ def solve_captcha(b64_str):
     raw = base64.b64decode(b64_str)
     return ocr.classification(Image.open(BytesIO(raw)).convert("RGB"))
 
-def try_login(state_code, csc_id, password, debug=False):
-    """Ek credential se login try karo."""
+
+def try_login(state_code, csc_id, password):
     cfg = STATE_CONFIG[state_code]
     base_url = f"https://{cfg['full']}.agristack.gov.in"
     sub = cfg['sub']
@@ -497,7 +459,6 @@ def try_login(state_code, csc_id, password, debug=False):
 
         loc = r.headers.get("Location", "")
         
-        # Auth code parse (MH fix included)
         auth_code = None
         code_match = re.search(r'[?&]code=([^&]+)', loc)
         if code_match:
@@ -563,61 +524,56 @@ def try_login(state_code, csc_id, password, debug=False):
             }
 
     except Exception as e:
-        if debug:
-            log.error("[%s] %s", state_code, e)
+        log.error("[%s] %s", state_code, e)
     
     return None
 
+
 def parallel_login_state(state_code):
-    """State ke liye parallel login."""
-    creds = CSC_CREDENTIALS[:]
-    cfg = STATE_CONFIG[state_code]
-    if cfg["csc_id"] and cfg["password"]:
-        creds.insert(0, {"id": cfg["csc_id"], "password": cfg["password"]})
-    
-    log.info("[%s] Parallel login: %d creds", state_code, len(creds))
+    log.info("[%s] Parallel login starting...", state_code)
     
     winner = None
     with ThreadPoolExecutor(max_workers=PARALLEL_WORKERS) as ex:
-        futures = {ex.submit(try_login, state_code, c["id"], c["password"]): c for c in creds}
-        for i, future in enumerate(as_completed(futures), 1):
+        futures = {ex.submit(try_login, state_code, c["id"], c["password"]): c for c in CSC_CREDENTIALS}
+        for future in as_completed(futures):
             try:
                 result = future.result()
                 if result:
                     winner = result
+                    log.info("[%s] ✅ WINNER: %s", state_code, futures[future]["id"])
                     for f in futures:
                         f.cancel()
-                    log.info("[%s] ✅ WINNER: %s", state_code, futures[future]["id"])
                     break
             except Exception:
                 pass
     
+    if not winner:
+        log.warning("[%s] ❌ No winner found", state_code)
+    
     return winner
 
+
 def auto_refresh_loop(state_code):
-    """Har 5 sec check karo, expire ho to refresh."""
     while True:
         try:
             cached = cache_get(state_code)
             if not cached:
-                log.info("[%s] 🔄 Refreshing...", state_code)
+                log.info("[%s] Refreshing...", state_code)
                 result = parallel_login_state(state_code)
                 if result:
                     cache_set(state_code, result['user_token'], result['auth_token'], result['expires_in'])
                     log.info("[%s] ✅ Cached (user=%s)", state_code, result['user_id'])
                 else:
-                    log.warning("[%s] ❌ Failed, retry in 10s", state_code)
                     time.sleep(10)
                     continue
             time.sleep(REFRESH_INTERVAL)
         except Exception as e:
-            log.error("[%s] Loop error: %s", state_code, e)
+            log.error("[%s] %s", state_code, e)
             time.sleep(5)
 
-# ===========================================================================
-# FLASK APP
-# ===========================================================================
+
 app = Flask(__name__)
+
 
 @app.after_request
 def _cors(resp):
@@ -626,6 +582,7 @@ def _cors(resp):
     resp.headers["Access-Control-Allow-Methods"] = "GET, POST, OPTIONS"
     return resp
 
+
 @app.route("/", methods=["GET"])
 def index():
     return jsonify({
@@ -633,12 +590,14 @@ def index():
         "service": "agristack-token-api",
         "states": ALL_STATES,
         "cached": list(_token_cache.keys()),
-        "auto_refresh": f"{REFRESH_INTERVAL}s"
+        "refresh_interval": REFRESH_INTERVAL
     })
+
 
 @app.route("/states", methods=["GET"])
 def list_states():
     return jsonify({"status": "success", "states": ALL_STATES})
+
 
 @app.route("/<state>", methods=["GET"])
 def get_token(state):
@@ -657,8 +616,9 @@ def get_token(state):
     
     return jsonify({
         "status": False,
-        "message": f"No token for {state} yet, refreshing..."
+        "message": f"No token for {state} yet. Try /{state}/refresh"
     }), 503
+
 
 @app.route("/<state>/refresh", methods=["GET", "POST"])
 def refresh_token(state):
@@ -668,7 +628,7 @@ def refresh_token(state):
     
     result = parallel_login_state(state)
     if not result:
-        return jsonify({"status": False, "message": "Login failed"}), 502
+        return jsonify({"status": False, "message": f"Login failed for {state}"}), 502
     
     cache_set(state, result['user_token'], result['auth_token'], result['expires_in'])
     return jsonify({
@@ -679,34 +639,30 @@ def refresh_token(state):
         "user_token": result['user_token']
     })
 
-# ===========================================================================
-# STARTUP — Render compatible
-# ===========================================================================
-def start_background_threads():
-    """Har state ka refresh loop background mein chalao."""
-    for sc in CSC_ENABLED_STATES:
-        threading.Thread(target=auto_refresh_loop, args=(sc,), daemon=True, name=f"r-{sc}").start()
-        log.info("[%s] background thread started", sc)
-        time.sleep(0.3)
 
-# Background threads sirf tab start karo jab Flask start ho
 _bg_started = False
 _bg_lock = threading.Lock()
 
-def ensure_bg_started():
+
+def start_all_background():
+    for sc in ALL_STATES:
+        threading.Thread(target=auto_refresh_loop, args=(sc,), daemon=True, name=f"r-{sc}").start()
+        log.info("[%s] background thread started", sc)
+        time.sleep(0.5)
+
+
+def ensure_bg():
     global _bg_started
     with _bg_lock:
         if not _bg_started:
             _bg_started = True
-            threading.Thread(target=start_background_threads, daemon=True).start()
+            threading.Thread(target=start_all_background, daemon=True).start()
 
-# Flask request se pehle background start karo
+
 @app.before_request
 def _start_bg():
-    ensure_bg_started()
+    ensure_bg()
 
-# Render / gunicorn ke liye app expose
-if __name__ == "__main__":
-    ensure_bg_started()
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False, threaded=True)
+
+# Render startup
+ensure_bg()
